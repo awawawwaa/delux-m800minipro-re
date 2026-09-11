@@ -1,17 +1,17 @@
 <#
 .SYNOPSIS
-    Bridge HTTP local para configurar o DPI do mouse Delux (VID 0x1d57 / PID 0xfa60)
-    via HID Feature Report nativo do Windows, contornando o bloqueio do WebHID.
+    Local HTTP bridge to configure the Delux mouse's DPI (VID 0x1d57 / PID 0xfa60)
+    via native Windows HID Feature Reports, working around the WebHID block.
 
 .DESCRIPTION
-    O WebHID do navegador zera os reports de qualquer colecao HID com usage page
-    "Generic Desktop / Mouse" (bloqueio de seguranca do proprio browser). O Feature
-    Report vendor-especifico (ReportID 4) que carrega a config de DPI esta dentro
-    dessa mesma colecao bloqueada. Este script fala direto com hid.dll/setupapi.dll
-    (P/Invoke, sem passar pelo navegador) e expoe um servidor HTTP local simples
-    que o webapp (webapp/index.html) chama via fetch().
+    The browser's WebHID zeroes out reports for any HID collection with usage page
+    "Generic Desktop / Mouse" (a security block built into the browser itself). The
+    vendor-specific Feature Report (ReportID 4) carrying the DPI config lives inside
+    that same blocked collection. This script talks directly to hid.dll/setupapi.dll
+    (P/Invoke, bypassing the browser) and exposes a simple local HTTP server that the
+    webapp (webapp/index.html) calls via fetch().
 
-    Rode este script e deixe a janela aberta enquanto usa o webapp. Ctrl+C para parar.
+    Run this script and keep the window open while using the webapp. Ctrl+C to stop.
 
 .EXAMPLE
     .\Start-DpiBridge.ps1
@@ -37,8 +37,8 @@ function Find-DpiDevicePath {
 }
 
 function Find-BatteryDevicePath {
-    # Colecao "Ordinal" (usagePage 0x0A) - onde o ReportID 3 (heartbeat com bateria
-    # e status de carregamento) realmente aparece, confirmado via Raw Input.
+    # "Ordinal" collection (usagePage 0x0A) - where ReportID 3 (heartbeat carrying
+    # battery and charging status) actually shows up, confirmed via Raw Input.
     $devices = [HidBridge]::EnumerateDevices($VendorId, $ProductId)
     $candidate = $devices | Where-Object { $_.UsagePage -eq 0x0A } | Select-Object -First 1
     return $candidate
@@ -51,18 +51,18 @@ function Build-DpiPayload {
         [bool]$Lod2mm = $false,
         [bool]$MotionSync = $false,
         [bool]$AngleSnapping = $false,
-        [int]$ConnectionMode = 3   # 0=HP, 1=LP, 3=Corded (2 nunca observado)
+        [int]$ConnectionMode = 3   # 0=HP, 1=LP, 3=Corded (2 never observed)
     )
 
-    # Template de 56 bytes capturado do software oficial (ReportID 4, "Performance").
-    # offsets confirmados com multiplas amostras:
+    # 56-byte template captured from the official software (ReportID 4, "Performance").
+    # offsets confirmed across multiple samples:
     #   3: bitmask  bit0=Ripple Control  bit4(0x10)=LOD(1=2mm,0=1mm)
     #   4: bitmask  bit0=Motion Sync     bit4(0x10)=Angle Snapping
-    #   5: bitmask dos 6 estagios de DPI habilitados
-    #   6: modo de conexao/sensor frame rate (0=HP, 1=LP, 3=Corded)
-    #   8-13: tabela de DPI (6 slots, valor = (byte+1)*50)
-    #   24: estagio de DPI ativo (1-based)
-    #   51: checksum = soma(3,4,5,6,8,9,10,11,12,13,24) + 0x34, mod 256
+    #   5: bitmask of the 6 enabled DPI stages
+    #   6: connection mode/sensor frame rate (0=HP, 1=LP, 3=Corded)
+    #   8-13: DPI table (6 slots, value = (byte+1)*50)
+    #   24: active DPI stage (1-based)
+    #   51: checksum = sum(3,4,5,6,8,9,10,11,12,13,24) + 0x34, mod 256
     $bytes = [byte[]](
         0x04, 0x38, 0x01, 0x00, 0x00, 0x3f, 0x03, 0x00,
         0x07, 0x0f, 0x17, 0x1f, 0x3f, 0x63, 0x00, 0x00,
@@ -107,10 +107,10 @@ function Build-DpiPayload {
 function Build-DebouncePayload {
     param([int]$DebounceMs)
 
-    # Template de 15 bytes capturado do software oficial (ReportID 5, "Performance").
-    # offset 10 = debounce time em ms puro (sem escala).
-    # offset 12 = offset10 + 28 (0x1c) -- confirmado em 3 amostras independentes (13/7/1ms).
-    # Demais bytes ainda nao identificados, mantidos fixos como capturados.
+    # 15-byte template captured from the official software (ReportID 5, "Performance").
+    # offset 10 = debounce time in plain ms (no scaling).
+    # offset 12 = offset10 + 28 (0x1c) -- confirmed across 3 independent samples (13/7/1ms).
+    # Remaining bytes not identified yet, kept fixed as captured.
     $bytes = [byte[]](
         0x05, 0x0f, 0x01, 0x70, 0x03, 0xa8, 0x00, 0x00,
         0xff, 0x02, 0x0d, 0x02, 0x29, 0x00, 0x00
@@ -127,8 +127,8 @@ function Build-DebouncePayload {
 function Build-PollingRatePayload {
     param([int]$Hz)
 
-    # Template de 9 bytes (ReportID 6). offset3 = enum da taxa; offset4 = 0xFF - offset3
-    # (confirmado em 3 amostras: 1000/500/250Hz). 125Hz extrapolado, NAO confirmado.
+    # 9-byte template (ReportID 6). offset3 = rate enum; offset4 = 0xFF - offset3
+    # (confirmed across 3 samples: 1000/500/250Hz). 125Hz is extrapolated, NOT confirmed.
     $table = @{ 1000 = 0x74; 500 = 0x73; 250 = 0x72; 125 = 0x71 }
     if (-not $table.ContainsKey($Hz)) { throw "Taxa de polling nao suportada: $Hz Hz" }
 

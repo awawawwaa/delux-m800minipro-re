@@ -266,7 +266,7 @@ instead of reimplementing from scratch:
 | `scripts/HidBridge.cs` | The P/Invoke layer (`hid.dll`/`setupapi.dll`): enumeration, `SetFeatureReport`, `ReadFileWithTimeout` (battery), etc. |
 | `scripts/Start-DpiBridge.ps1` | A local HTTP server wrapping `HidBridge.cs`, with the exact byte-building logic (`Build-DpiPayload`, `Build-DebouncePayload`, `Build-PollingRatePayload`) for every report above, including the checksum formulas |
 | `webapp/index.html` | A browser UI talking to the bridge over HTTP — shows the full field set (DPI, debounce, polling rate, ripple control, motion sync, angle snapping, LOD, sensor frame rate) end to end |
-| `Iniciar-Bridge.bat` | Double-click shortcut that launches `Start-DpiBridge.ps1` |
+| `Start-Bridge.bat` | Double-click shortcut that launches `Start-DpiBridge.ps1` |
 
 ## Capturing your own data (e.g. to extend this to RGB/macros)
 

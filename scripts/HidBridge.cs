@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 
-// P/Invoke direto para hid.dll / setupapi.dll do Windows.
-// Usado para contornar o bloqueio do WebHID (que zera os reports de qualquer
-// colecao HID com usage page "Generic Desktop / Mouse"), acessando o mesmo
-// dispositivo por fora do navegador.
+// Direct P/Invoke into Windows' hid.dll / setupapi.dll.
+// Used to work around the WebHID block (which zeroes out reports for any
+// HID collection with usage page "Generic Desktop / Mouse"), by accessing
+// the same device from outside the browser.
 public static class HidBridge
 {
     const uint GENERIC_READ = 0x80000000;
@@ -261,9 +261,9 @@ public static class HidBridge
         finally { CloseHandle(handle); }
     }
 
-    // Le um input report com timeout (via I/O overlapped), pra nao travar o
-    // bridge indefinidamente se o dispositivo nao mandar dados a tempo (o
-    // heartbeat deste mouse chega a cada ~2-4s quando ocioso).
+    // Reads an input report with a timeout (via overlapped I/O), so it doesn't
+    // block the bridge indefinitely if the device doesn't send data in time
+    // (this mouse's heartbeat arrives roughly every ~2-4s when idle).
     public static byte[] ReadFileWithTimeout(string path, int bufferSize, int timeoutMs)
     {
         IntPtr handle = CreateFile(path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, IntPtr.Zero);
