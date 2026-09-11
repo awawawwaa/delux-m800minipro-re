@@ -1,0 +1,12 @@
+# OS / editor cruft
+Thumbs.db
+Desktop.ini
+*.swp
+.vscode/
+.idea/
+
+# Local capture files (large, not part of the reference implementation)
+*.pcapng
+
+# Local Claude Code session config
+.claude/

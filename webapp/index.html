@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delux DPI Configurator</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f5f7;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --muted: #666;
+    --border: #ddd;
+    --accent: #2563eb;
+    --accent-text: #ffffff;
+    --ok: #16a34a;
+    --err: #dc2626;
+    --warn: #b45309;
+    --mono-bg: #f0f0f0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181c;
+      --card: #232429;
+      --text: #eee;
+      --muted: #9a9a9a;
+      --border: #3a3b41;
+      --accent: #3b82f6;
+      --accent-text: #ffffff;
+      --ok: #4ade80;
+      --err: #f87171;
+      --warn: #fbbf24;
+      --mono-bg: #1a1b1f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 24px 16px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 20px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  button {
+    background: var(--accent);
+    color: var(--accent-text);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #status {
+    font-size: 0.85rem;
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--mono-bg);
+    word-break: break-word;
+  }
+  #status.ok { color: var(--ok); }
+  #status.err { color: var(--err); }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+  th { color: var(--muted); font-weight: 500; }
+  input[type="number"] {
+    width: 90px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+  }
+  input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; }
+  select {
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .toggles { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .toggle-row { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; }
+  .toggle-row label { min-width: 160px; }
+  .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 800px) { .grid-2col { grid-template-columns: 1fr; } }
+  .save-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  #saveIndicator { font-size: 0.85rem; }
+  #saveIndicator.dirty { color: var(--warn); font-weight: 600; }
+  #saveIndicator.clean { color: var(--muted); }
+  .change-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--warn);
+    margin-left: 6px;
+    visibility: hidden;
+  }
+  .change-dot.visible { visibility: visible; }
+  pre {
+    background: var(--mono-bg);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 0.78rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  details summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; margin-top: 10px; }
+  code {
+    background: var(--mono-bg);
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-size: 0.85em;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Delux DPI Configurator</h1>
+  <div class="sub">
+    Controls the mouse's DPI stages without the official software.
+    Built specifically for the Delux M800 Mini Pro running Delux's "competitive"
+    firmware (required to expose the Sensor frame rate / mode setting).
+  </div>
+
+  <div class="card">
+    <div style="margin-bottom: 10px; font-size: 0.85rem;">
+      This mouse exposes its config report inside a "Mouse" HID collection,
+      which browsers block for security reasons (WebHID zeroes out those reports).
+      So instead of connecting directly through the browser, this page talks to
+      a local bridge that runs outside the browser and has full HID access:
+      <br><br>
+      <code>powershell -ExecutionPolicy Bypass -File scripts\Start-DpiBridge.ps1</code>
+      <br><br>
+      Keep the bridge window open while using this page.
+    </div>
+    <button id="checkBtn">Check bridge</button>
+    <div id="status">Bridge not checked yet.</div>
+    <div style="color: var(--muted); font-size: 0.78rem; margin-top: 10px;">
+      This mouse's firmware doesn't support reading its current settings back
+      (there's no working GET_REPORT for Debounce, Polling Rate, LOD or Sensor
+      frame rate / mode). Because of that, those fields in the Performance card
+      start unset instead of showing a guessed value — pick a value for each
+      before saving, so nothing gets silently overwritten with an assumption.
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <div>
+        <div style="font-size: 1.6rem; font-weight: 600;" id="batteryPct">-- %</div>
+        <div style="color: var(--muted); font-size: 0.85rem;" id="batteryState">battery not read yet</div>
+      </div>
+      <button id="batteryBtn">Refresh battery</button>
+    </div>
+    <div style="color: var(--muted); font-size: 0.78rem; margin-top: 8px;">
+      Can take up to ~6s (waits for the mouse's next periodic heartbeat).
+    </div>
+  </div>
+
+  <div class="grid-2col" id="mainGrid">
+    <div class="card">
+      <h2 style="font-size: 1.05rem; margin: 0 0 10px;">DPI Stages</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Enabled</th>
+            <th>Slot</th>
+            <th>DPI</th>
+            <th>Active</th>
+          </tr>
+        </thead>
+        <tbody id="slotsBody"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size: 1.05rem; margin: 0 0 14px;">Performance</h2>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div>
+          <div style="margin-bottom: 6px; font-size: 0.85rem;">Debounce time (ms)<span class="change-dot" id="dotDebounce"></span></div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="number" id="debounceInput" min="1" max="15" placeholder="not set">
+            <span style="color: var(--muted); font-size: 0.85rem;">ms (1-15)</span>
+          </div>
+        </div>
+        <div>
+          <div style="margin-bottom: 6px; font-size: 0.85rem;">Polling rate<span class="change-dot" id="dotPolling"></span></div>
+          <select id="pollingRateSelect">
+            <option value="" selected>Not set</option>
+            <option value="1000">1000 Hz</option>
+            <option value="500">500 Hz</option>
+            <option value="250">250 Hz</option>
+            <option value="125">125 Hz (unconfirmed)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="toggles">
+        <div class="toggle-row">
+          <label for="rippleControl">Ripple Control<span class="change-dot" id="dotRipple"></span></label>
+          <input type="checkbox" id="rippleControl">
+        </div>
+        <div class="toggle-row">
+          <label for="motionSync">Motion Sync<span class="change-dot" id="dotMotionSync"></span></label>
+          <input type="checkbox" id="motionSync">
+        </div>
+        <div class="toggle-row">
+          <label for="angleSnapping">Angle Snapping<span class="change-dot" id="dotAngleSnapping"></span></label>
+          <input type="checkbox" id="angleSnapping">
+        </div>
+        <div class="toggle-row">
+          <label for="lodSelect">LOD (lift-off distance)<span class="change-dot" id="dotLod"></span></label>
+          <select id="lodSelect">
+            <option value="" selected>Not set</option>
+            <option value="0">1mm</option>
+            <option value="1">2mm</option>
+          </select>
+        </div>
+        <div class="toggle-row">
+          <label for="connModeSelect">Sensor frame rate / mode<span class="change-dot" id="dotConnMode"></span></label>
+          <select id="connModeSelect">
+            <option value="" selected>Not set</option>
+            <option value="0">HP (high performance)</option>
+            <option value="1">LP (power saving)</option>
+            <option value="3">Corded (wired)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="presetMaxPerfBtn">Set maximum performance mode - Custom settings</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card save-bar">
+    <span id="saveIndicator" class="clean">All saved</span>
+    <button id="saveBtn" disabled>Save changes</button>
+  </div>
+
+  <details>
+    <summary>Debug (payload sent / bridge response)</summary>
+    <pre id="debugOut">-</pre>
+  </details>
+</div>
+
+<script>
+const BRIDGE_URL = 'http://localhost:8765';
+// Delay between successive writes when saving multiple groups at once. The mouse
+// talks over a 2.4GHz RF link with no delivery confirmation (no GET_REPORT support) -
+// firing several SET_REPORT writes back-to-back can outrun the dongle's relay to the
+// mouse and cause some of them to be silently dropped. Spacing them out fixes that.
+const SAVE_DELAY_MS = 800;
+
+const DEFAULT_DPI = [400, 800, 1200, 1600, 3200, 5000];
+const DEFAULT_ENABLED = [false, true, false, true, true, false]; // 800/1600/3200 enabled
+const DEFAULT_ACTIVE = 1; // 0-based -> slot 2 (800dpi)
+
+const statusEl = document.getElementById('status');
+const debugOut = document.getElementById('debugOut');
+const checkBtn = document.getElementById('checkBtn');
+const slotsBody = document.getElementById('slotsBody');
+const debounceInput = document.getElementById('debounceInput');
+const rippleControlEl = document.getElementById('rippleControl');
+const motionSyncEl = document.getElementById('motionSync');
+const angleSnappingEl = document.getElementById('angleSnapping');
+const lodSelectEl = document.getElementById('lodSelect');
+const connModeSelectEl = document.getElementById('connModeSelect');
+const pollingRateSelectEl = document.getElementById('pollingRateSelect');
+const batteryPctEl = document.getElementById('batteryPct');
+const batteryStateEl = document.getElementById('batteryState');
+const batteryBtn = document.getElementById('batteryBtn');
+const saveBtn = document.getElementById('saveBtn');
+const saveIndicatorEl = document.getElementById('saveIndicator');
+const presetMaxPerfBtn = document.getElementById('presetMaxPerfBtn');
+const mainGridEl = document.getElementById('mainGrid');
+
+const dotRipple = document.getElementById('dotRipple');
+const dotMotionSync = document.getElementById('dotMotionSync');
+const dotAngleSnapping = document.getElementById('dotAngleSnapping');
+const dotLod = document.getElementById('dotLod');
+const dotConnMode = document.getElementById('dotConnMode');
+const dotDebounce = document.getElementById('dotDebounce');
+const dotPolling = document.getElementById('dotPolling');
+let slotDots = [];
+
+let baseline = null;
+
+function setStatus(msg, kind) {
+  statusEl.textContent = msg;
+  statusEl.className = kind || '';
+}
+
+function clampDebounceMs(raw) {
+  let n = parseInt(raw, 10);
+  if (isNaN(n)) n = 1;
+  return Math.min(15, Math.max(1, n));
+}
+
+function buildSlotsUI(dpiValues, enabledValues, activeIndex) {
+  slotsBody.innerHTML = '';
+  slotDots = [];
+  for (let i = 0; i < 6; i++) {
+    const tr = document.createElement('tr');
+
+    const tdEnabled = document.createElement('td');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = enabledValues[i];
+    cb.dataset.role = 'enabled';
+    cb.dataset.index = i;
+    tdEnabled.appendChild(cb);
+
+    const tdSlot = document.createElement('td');
+    tdSlot.append('Slot ' + (i + 1));
+    const dot = document.createElement('span');
+    dot.className = 'change-dot';
+    tdSlot.appendChild(dot);
+    slotDots[i] = dot;
+
+    const tdDpi = document.createElement('td');
+    const num = document.createElement('input');
+    num.type = 'number';
+    num.min = 50;
+    num.max = 12800;
+    num.step = 50;
+    num.value = dpiValues[i];
+    num.dataset.role = 'dpi';
+    num.dataset.index = i;
+    tdDpi.appendChild(num);
+
+    const tdActive = document.createElement('td');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'active';
+    radio.checked = (i === activeIndex);
+    radio.dataset.role = 'active';
+    radio.dataset.index = i;
+    tdActive.appendChild(radio);
+
+    tr.append(tdEnabled, tdSlot, tdDpi, tdActive);
+    slotsBody.appendChild(tr);
+  }
+}
+
+function readFullStateFromUI() {
+  const dpi = [0, 0, 0, 0, 0, 0];
+  const enabled = [false, false, false, false, false, false];
+  let active = 0;
+
+  slotsBody.querySelectorAll('input').forEach(input => {
+    const i = parseInt(input.dataset.index, 10);
+    if (input.dataset.role === 'dpi') dpi[i] = parseInt(input.value, 10) || 50;
+    if (input.dataset.role === 'enabled') enabled[i] = input.checked;
+    if (input.dataset.role === 'active' && input.checked) active = i;
+  });
+
+  return {
+    dpi,
+    enabled,
+    active,
+    rippleControl: rippleControlEl.checked,
+    motionSync: motionSyncEl.checked,
+    angleSnapping: angleSnappingEl.checked,
+    lod2mm: lodSelectEl.value === '' ? null : lodSelectEl.value === '1',
+    connectionMode: connModeSelectEl.value === '' ? null : parseInt(connModeSelectEl.value, 10),
+    debounceMs: debounceInput.value.trim() === '' ? null : clampDebounceMs(debounceInput.value),
+    pollingRateHz: pollingRateSelectEl.value === '' ? null : parseInt(pollingRateSelectEl.value, 10)
+  };
+}
+
+function buildApplyPayload(state) {
+  return {
+    dpi: state.dpi,
+    enabled: state.enabled,
+    active: state.active,
+    rippleControl: state.rippleControl,
+    motionSync: state.motionSync,
+    angleSnapping: state.angleSnapping,
+    lod2mm: state.lod2mm,
+    connectionMode: state.connectionMode
+  };
+}
+
+function isApplyDirty(state) {
+  return JSON.stringify(buildApplyPayload(state)) !== JSON.stringify(buildApplyPayload(baseline));
+}
+function isDebounceDirty(state) { return state.debounceMs !== baseline.debounceMs; }
+function isPollingDirty(state) { return state.pollingRateHz !== baseline.pollingRateHz; }
+
+function setDotVisible(dotEl, visible) {
+  if (!dotEl) return;
+  dotEl.classList.toggle('visible', visible);
+}
+
+function updateDirtyIndicator() {
+  const state = readFullStateFromUI();
+  const dirty = isApplyDirty(state) || isDebounceDirty(state) || isPollingDirty(state);
+  saveIndicatorEl.textContent = dirty ? 'Unsaved changes' : 'All saved';
+  saveIndicatorEl.className = dirty ? 'dirty' : 'clean';
+
+  setDotVisible(dotRipple, state.rippleControl !== baseline.rippleControl);
+  setDotVisible(dotMotionSync, state.motionSync !== baseline.motionSync);
+  setDotVisible(dotAngleSnapping, state.angleSnapping !== baseline.angleSnapping);
+  setDotVisible(dotLod, state.lod2mm !== baseline.lod2mm);
+  setDotVisible(dotConnMode, state.connectionMode !== baseline.connectionMode);
+  setDotVisible(dotDebounce, state.debounceMs !== baseline.debounceMs);
+  setDotVisible(dotPolling, state.pollingRateHz !== baseline.pollingRateHz);
+
+  for (let i = 0; i < 6; i++) {
+    const changed = state.dpi[i] !== baseline.dpi[i] ||
+      state.enabled[i] !== baseline.enabled[i] ||
+      (i === state.active) !== (i === baseline.active);
+    setDotVisible(slotDots[i], changed);
+  }
+}
+
+async function checkBridge() {
+  try {
+    const res = await fetch(`${BRIDGE_URL}/status`);
+    const data = await res.json();
+    debugOut.textContent = JSON.stringify(data, null, 2);
+
+    if (data.found) {
+      setStatus(`Bridge OK — device found: ${data.productName || data.path}`, 'ok');
+      saveBtn.disabled = false;
+    } else {
+      setStatus("Bridge responded, but couldn't find the mouse: " + (data.error || ''), 'err');
+    }
+  } catch (e) {
+    setStatus("Couldn't reach the bridge at " + BRIDGE_URL + '. Is it running? (' + e.message + ')', 'err');
+  }
+}
+
+async function postJson(path, body) {
+  try {
+    const res = await fetch(`${BRIDGE_URL}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    return { ok: !!data.ok, data };
+  } catch (e) {
+    return { ok: false, data: { ok: false, error: e.message } };
+  }
+}
+
+const postApply = state => postJson('/apply', buildApplyPayload(state));
+const postDebounce = state => postJson('/apply-debounce', { debounceMs: state.debounceMs });
+const postPolling = state => postJson('/apply-pollingrate', { hz: state.pollingRateHz });
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function saveChanges() {
+  const state = readFullStateFromUI();
+  const dirtyApply = isApplyDirty(state);
+  const dirtyDebounce = isDebounceDirty(state);
+  const dirtyPolling = isPollingDirty(state);
+
+  if (!dirtyApply && !dirtyDebounce && !dirtyPolling) {
+    setStatus('Nothing to save - no pending changes.', 'ok');
+    return;
+  }
+
+  // The mouse has no readback support for these fields (see the note in the
+  // Performance card), so a group is never sent with a guessed/unset value -
+  // it's skipped instead, and the user has to explicitly pick something first.
+  const missingApplyFields = [];
+  if (state.lod2mm === null) missingApplyFields.push('LOD');
+  if (state.connectionMode === null) missingApplyFields.push('Sensor frame rate / mode');
+
+  const canSaveApply = dirtyApply && missingApplyFields.length === 0;
+  const skipApply = dirtyApply && !canSaveApply;
+  const canSaveDebounce = dirtyDebounce && state.debounceMs !== null;
+  const skipDebounce = dirtyDebounce && !canSaveDebounce;
+  const canSavePolling = dirtyPolling && state.pollingRateHz !== null;
+  const skipPolling = dirtyPolling && !canSavePolling;
+
+  if (!canSaveApply && !canSaveDebounce && !canSavePolling) {
+    const msgs = [];
+    if (skipApply) msgs.push(`DPI/Performance needs ${missingApplyFields.join(' and ')} set first`);
+    if (skipDebounce) msgs.push('Debounce needs a value first');
+    if (skipPolling) msgs.push('Polling rate needs a value first');
+    setStatus('Nothing saved: ' + msgs.join('; ') + '.', 'err');
+    return;
+  }
+
+  saveBtn.disabled = true;
+  const results = [];
+  const lastDebug = {};
+  let needsDelay = false;
+
+  const waitBetweenWrites = async () => {
+    if (needsDelay) await sleep(SAVE_DELAY_MS);
+    needsDelay = true;
+  };
+
+  if (canSaveApply) {
+    await waitBetweenWrites();
+    setStatus('Saving DPI/Performance...', 'ok');
+    const r = await postApply(state);
+    lastDebug.apply = r.data;
+    results.push({ name: 'DPI/Performance', ok: r.ok, data: r.data });
+    if (r.ok) baseline = { ...baseline, ...buildApplyPayload(state) };
+  } else if (skipApply) {
+    results.push({ name: 'DPI/Performance', ok: false, data: { error: `needs ${missingApplyFields.join(' and ')} set` } });
+  }
+
+  if (canSaveDebounce) {
+    await waitBetweenWrites();
+    setStatus('Saving debounce...', 'ok');
+    const r = await postDebounce(state);
+    lastDebug.debounce = r.data;
+    results.push({ name: 'Debounce', ok: r.ok, data: r.data });
+    if (r.ok) baseline.debounceMs = state.debounceMs;
+  } else if (skipDebounce) {
+    results.push({ name: 'Debounce', ok: false, data: { error: 'needs a value set' } });
+  }
+
+  if (canSavePolling) {
+    await waitBetweenWrites();
+    setStatus('Saving polling rate...', 'ok');
+    const r = await postPolling(state);
+    lastDebug.pollingRate = r.data;
+    results.push({ name: 'Polling rate', ok: r.ok, data: r.data });
+    if (r.ok) baseline.pollingRateHz = state.pollingRateHz;
+  } else if (skipPolling) {
+    results.push({ name: 'Polling rate', ok: false, data: { error: 'needs a value set' } });
+  }
+
+  debugOut.textContent = JSON.stringify(lastDebug, null, 2);
+
+  const failed = results.filter(r => !r.ok);
+  const succeeded = results.filter(r => r.ok);
+  if (failed.length === 0) {
+    setStatus('Saved successfully: ' + succeeded.map(r => r.name).join(', ') + '.', 'ok');
+  } else {
+    const okNames = succeeded.map(r => r.name).join(', ');
+    const failMsg = failed.map(r => `${r.name} (${(r.data && (r.data.error || r.data.result)) || 'unknown error'})`).join('; ');
+    setStatus((okNames ? 'Saved: ' + okNames + '. ' : '') + 'Could not save: ' + failMsg, okNames ? 'ok' : 'err');
+  }
+
+  saveBtn.disabled = false;
+  updateDirtyIndicator();
+}
+
+function applyMaxPerformancePreset() {
+  rippleControlEl.checked = false;
+  motionSyncEl.checked = false;
+  angleSnappingEl.checked = false;
+  lodSelectEl.value = '1';        // 2mm
+  connModeSelectEl.value = '3';   // Corded
+  pollingRateSelectEl.value = '1000';
+  debounceInput.value = 1;
+  updateDirtyIndicator();
+}
+
+async function refreshBattery() {
+  batteryBtn.disabled = true;
+  batteryStateEl.textContent = 'reading... (up to ~6s)';
+  try {
+    const res = await fetch(`${BRIDGE_URL}/battery`);
+    const data = await res.json();
+    debugOut.textContent = JSON.stringify(data, null, 2);
+
+    if (data.ok) {
+      batteryPctEl.textContent = data.battery + ' %';
+      batteryStateEl.textContent = data.charging ? 'charging' : 'on battery';
+    } else {
+      batteryStateEl.textContent = 'error: ' + (data.error || 'unknown');
+    }
+  } catch (e) {
+    batteryStateEl.textContent = 'error contacting the bridge: ' + e.message;
+  } finally {
+    batteryBtn.disabled = false;
+  }
+}
+
+buildSlotsUI(DEFAULT_DPI, DEFAULT_ENABLED, DEFAULT_ACTIVE);
+baseline = readFullStateFromUI();
+updateDirtyIndicator();
+
+checkBtn.addEventListener('click', checkBridge);
+saveBtn.addEventListener('click', saveChanges);
+presetMaxPerfBtn.addEventListener('click', applyMaxPerformancePreset);
+debounceInput.addEventListener('change', () => {
+  if (debounceInput.value.trim() !== '') {
+    debounceInput.value = clampDebounceMs(debounceInput.value);
+  }
+});
+batteryBtn.addEventListener('click', refreshBattery);
+mainGridEl.addEventListener('input', updateDirtyIndicator);
+mainGridEl.addEventListener('change', updateDirtyIndicator);
+checkBridge();
+refreshBattery();
+setInterval(refreshBattery, 10 * 60 * 1000); // keep the battery reading fresh while the page stays open
+</script>
+</body>
+</html>
